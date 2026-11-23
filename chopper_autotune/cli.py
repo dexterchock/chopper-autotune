@@ -328,7 +328,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help='fallback capture via ACCELEROMETER_MEASURE and its CSV instead of streaming')
     add_motor(f, False, 'motor a or b, one per run (a=stepper_x, b=stepper_y); x/y also accepted')
     f.add_argument('--min-speed', type=int, default=20)
-    f.add_argument('--max-speed', type=int, default=120)
+    f.add_argument('--max-speed', type=int, default=160)
     f.add_argument('--step', type=int, default=2, help='speed increment in mm/s, default 2')
     f.add_argument('--iterations', type=int, default=1)
     f.add_argument('--measure-time', type=float, default=1.0,
@@ -347,9 +347,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help='fallback capture via ACCELEROMETER_MEASURE and its CSV instead of streaming')
     add_motor(mp, False, 'motor a or b, one per run (a=stepper_x, b=stepper_y); x/y also accepted')
     mp.add_argument('--min-speed', type=int, default=20)
-    mp.add_argument('--max-speed', type=int, default=250)
-    mp.add_argument('--step', type=int, default=10, help='speed increment in mm/s, default 10')
-    mp.add_argument('--print-speed', type=int, default=None,
+    mp.add_argument('--max-speed', type=int, default=160)
+    mp.add_argument('--step', type=int, default=5, help='speed increment in mm/s, default 5')
+    mp.add_argument('--print-speed', type=int, default=110,
                     help='your usual print speed (mm/s): flags whether it sits on a resonance '
                          'and names the quieter speeds nearby')
     mp.add_argument('--iterations', type=int, default=1)
@@ -485,7 +485,7 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument('--url', default='http://127.0.0.1:7125')
 
     cur = sub.add_parser('current', help='estimate run current per motor from free-air stress '
-                                         '(belt speeds 100–200 mm/s, endstop referee)')
+                                         '(belt speeds 150–550 mm/s, endstop referee)')
     add_motor(cur, True, 'motor a/b/ab (a=stepper_x, b=stepper_y); default ab')
     cur.add_argument('--margin', type=float, default=2.0,
                      help='recommended current = free-air skip threshold x this factor, '
@@ -534,10 +534,10 @@ def build_parser() -> argparse.ArgumentParser:
                                           'before skipped steps, at the configured run current')
     add_motor(env, True, 'motor a/b/ab (a=stepper_x, b=stepper_y); default ab')
     env.add_argument('--min-speed', type=int, default=150, help='speed ladder start in mm/s, default 150')
-    env.add_argument('--max-speed', type=int, default=350, help='speed ladder end in mm/s, default 350')
+    env.add_argument('--max-speed', type=int, default=550, help='speed ladder end in mm/s, default 550')
     env.add_argument('--step', type=int, default=50, help='speed ladder increment in mm/s, default 50')
-    env.add_argument('--accel-probe-speed', type=int, default=150,
-                     help='fixed speed for the acceleration sweep in mm/s, default 150')
+    env.add_argument('--accel-probe-speed', type=int, default=200,
+                     help='fixed speed for the acceleration sweep in mm/s, default 200')
     env.add_argument('--accel', type=float, default=None,
                      help='speed-sweep acceleration and accel-ladder base, default the printer\'s '
                           'own: max_accel, on Kalico\'s limited_* what the per-axis limits give '

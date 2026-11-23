@@ -20,7 +20,7 @@ from .collect import (Screen, ThermalGuard, autotune_goal, confirmed, coupled_xy
 from .dataset import save_json
 from .klippy import Klippy, find_socket
 
-BELT_SPEEDS = (100, 150, 200)
+BELT_SPEEDS = (150, 300, 450, 550)
 STATE = os.path.expanduser('~/printer_data/config/chopper-autotune/current.json')
 STROKES_PER_SPEED = 3
 COARSE_STEP = 2.0          # fast approach step; the fine creep only covers the last one
