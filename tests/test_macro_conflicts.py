@@ -93,7 +93,7 @@ def test_a_tool_read_before_ours_loses_quietly(tmp_path):
 def test_every_macro_calls_the_shell_command_of_its_own_name():
     # the rule the self-check and the panel recognise our macros by
     fileconfig = read_like_klipper(CFG)
-    assert len(our_macros()) == 14
+    assert len(our_macros()) == 15
     for name in our_macros():
         assert 'RUN_SHELL_COMMAND CMD=%s' % name.lower() in fileconfig.get('gcode_macro ' + name, 'gcode')
         assert 'chopper-autotune/' in fileconfig.get('gcode_shell_command ' + name.lower(), 'command')

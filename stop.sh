@@ -7,7 +7,7 @@
 #
 # SIGTERM: the tool's handler turns it into an exit that runs these steps. The [c]
 # bracket keeps the pattern from matching this script.
-if pkill -TERM -f "[c]hopper-autotune (tune|collect|find-speed|map|belts|demo|current|envelope|extruder)"; then
+if pkill -TERM -f "[c]hopper-autotune (tune|collect|find-speed|map|belts|demo|current|envelope|extruder|z)([[:space:]]|$)"; then
     echo "chopper-autotune: stop signal sent"
 else
     echo "chopper-autotune: nothing to stop"

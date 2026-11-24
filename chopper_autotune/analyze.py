@@ -717,11 +717,10 @@ def apply_rail(mk, settings: dict, steppers: 'list[str]', chopper: tmc.Chopper):
 
 
 def run_save(mk, items: 'list[tuple[dict, tmc.Chopper]]', extruder_state: 'dict | None' = None,
-             lines: 'list[str]' = ()):
+             lines: 'list[str]' = (), z_state: 'dict | None' = None):
     """Persist chopper winners into the Klipper config, each into every section of the
-    rail its dataset measured, one restart for the batch; the extruder's stored winner
-    (see extruder.save_winner_state) rides along. lines: what the console gets before the
-    write (see _persist)."""
+    rail its dataset measured, one restart for the batch; the extruder's and Z's stored
+    winners ride along. lines: what the console gets before the write (see _persist)."""
     settings = mk.settings()
     for manifest, combo in items:
         why = save_refusal(settings, manifest['driver'], *measured_steppers(manifest),
@@ -733,11 +732,20 @@ def run_save(mk, items: 'list[tuple[dict, tmc.Chopper]]', extruder_state: 'dict 
                            fields=extruder_state['fields'], autotune=extruder_state.get('autotune'))
         if why:
             raise SystemExit(why)
+    if z_state:
+        why = save_refusal(settings, z_state['driver'], *z_state['steppers'],
+                           fields=z_state['fields'], autotune=z_state.get('autotune'))
+        if why:
+            raise SystemExit(why)
     writes = [('tmc%s %s' % (manifest['driver'], stepper), register_options(combo.fields()))
               for manifest, combo in items for stepper in measured_steppers(manifest)]
     if extruder_state:
         writes.append(('tmc%s extruder' % extruder_state['driver'],
                        register_options(extruder_state['fields'])))
+    if z_state:
+        for stepper in z_state['steppers']:
+            writes.append(('tmc%s %s' % (z_state['driver'], stepper),
+                           register_options(z_state['fields'])))
     _persist(mk, writes, 'the new registers', lines)
 
 
@@ -750,8 +758,8 @@ def run_save_currents(mk, items: 'list[tuple[str, str, float]]', lines: 'list[st
 
 TUNED_FIELD_RE = re.compile(r'^\s*driver_(tbl|toff|hstrt|hend|tpfd)\s*[:=]',
                             re.IGNORECASE | re.MULTILINE)
-# the TMC sections of the tool's motors, X/Y twins included
-TMC_SECTION_RE = re.compile(r'^\[(tmc\w+ (?:stepper_[xy]\d*|extruder))\]', re.MULTILINE)
+# the TMC sections of the tool's motors, X/Y/Z twins included
+TMC_SECTION_RE = re.compile(r'^\[(tmc\w+ (?:stepper_[xyz]\d*|extruder))\]', re.MULTILINE)
 
 
 def tuned_tmc_sections(files: 'dict[str, str]') -> 'list[str]':
@@ -791,7 +799,7 @@ def _record_restore(sections: 'list[str]'):
                 pass
     now = time.time()
     save_json(RESULTS_HOME / RESTORED, {motor: now if motor in motors else last_restore(motor)
-                                        for motor in 'ABE'})
+                                        for motor in 'ABEZ'})
 
 
 def last_restore(motor: str) -> float:
@@ -1066,6 +1074,40 @@ def extruder_choice(args, settings: dict, since: float) -> 'tuple[str, dict | No
                      command_line('extruder')), state, False
 
 
+def z_choice(args, settings: dict, since: float) -> 'tuple[str, dict | None, bool]':
+    """As extruder_choice for the Z axis, whose run is the winner CHOPPER_Z stored."""
+    from .cli import command_line
+    from .collect import rail_steppers, tmc_sections
+    from .z_axis import STATE, load_winner_state
+    state = load_winner_state()
+    if not state:
+        return 'motor Z: no CHOPPER_Z run to save', None, False
+    steppers = state.get('steppers') or rail_steppers(settings, 'z')
+    if steppers != rail_steppers(settings, 'z'):
+        return ('motor Z: Z steppers changed since the last CHOPPER_Z run; re-run CHOPPER_Z',
+                None, True)
+    taken = os.path.getmtime(STATE)
+    why = save_refusal(settings, state['driver'], *steppers, fields=state['fields'],
+                       autotune=state.get('autotune')) \
+        or inaudible_refusal(state, tmc.Hearing.of(args, state), macro='CHOPPER_Z')
+    if why:
+        return 'motor Z: ' + why, None, True
+    combo = tmc.Chopper(**state['fields'])
+    run = datetime.fromtimestamp(taken).strftime('%Y-%m-%d %H:%M')
+    if all(configured(settings, state['driver'], s, state['fields']) for s in steppers):
+        sections = tmc_sections(state['driver'], *steppers) if len(steppers) > 1 else ''
+        return ('motor Z: the config already has %s, the result of the CHOPPER_Z run of %s%s, '
+                'so there is nothing to write'
+                % (combo.label(), run, ', in ' + sections if sections else '')), None, False
+    if taken < since:
+        return ('motor Z: not saving the last CHOPPER_Z run: it is older than the last '
+                'CHOPPER_RESTORE that rolled this motor back. Saving it would undo that rollback'), \
+            None, False
+    sections = tmc_sections(state['driver'], *steppers) if len(steppers) > 1 else ''
+    return save_line('motor Z', combo, 'the CHOPPER_Z run of ' + run, args.dry_run,
+                     command_line('z'), sections), dict(state, steppers=steppers), False
+
+
 def save_line(motor: str, combo: tmc.Chopper, run: str, dry_run: bool, search: str,
               sections: str = '') -> str:
     """The console line of a save that writes `combo`, the result of `run`, for `motor`
@@ -1114,11 +1156,13 @@ def run_save_latest(args, motors: 'str | None' = None, runs: 'list[Path] | None'
     # Klipper read the old copies at its last start: each motor is weighed against the
     # config as Klipper reads it once they are gone
     settings = settings_without(loaded, move_old_copies(mk, args.dry_run))
-    lines, refusals, items, extruder_state = [], [], [], None
+    lines, refusals, items, extruder_state, z_state = [], [], [], None, None
     for motor in motors or args.motor:
         since = 0.0 if runs else last_restore(motor)
         if motor == 'E':
             line, extruder_state, refused = extruder_choice(args, settings, since)
+        elif motor == 'Z':
+            line, z_state, refused = z_choice(args, settings, since)
         else:
             line, item, refused = axis_choice(args, MOTOR_AXES[motor], settings, since, runs,
                                               mk, loaded)
@@ -1127,17 +1171,17 @@ def run_save_latest(args, motors: 'str | None' = None, runs: 'list[Path] | None'
         lines.append(line)
         if refused:
             refusals.append(line)
-    if not items and not extruder_state and refusals:
+    if not items and not extruder_state and not z_state and refusals:
         # the refusal is the failure: the display shows what to change, and the console
         # gets it once, as the failure (M118 from a detached run, stderr from a dry run)
         tell(mk, [line for line in lines if line != refusals[0]])
         raise SystemExit(refusals[0])
-    if not items and not extruder_state:
+    if not items and not extruder_state and not z_state:
         tell(mk, lines + ['Nothing to save, Klipper keeps running'])
     elif args.dry_run:
         tell(mk, lines + ['DRY_RUN=1: nothing written, Klipper keeps running'])
     else:
-        run_save(mk, items, extruder_state, lines)
+        run_save(mk, items, extruder_state, lines, z_state=z_state)
     return 0
 
 
@@ -1146,14 +1190,15 @@ def hearing_text(hearing: tmc.Hearing) -> str:
                                     ', skip' if hearing.skip else '')
 
 
-def inaudible_refusal(state: dict, hearing: tmc.Hearing) -> 'str | None':
-    """Why a stored extruder winner the hearing skips is not saved, or None."""
+def inaudible_refusal(state: dict, hearing: tmc.Hearing,
+                      macro: str = 'CHOPPER_EXTRUDER') -> 'str | None':
+    """Why a stored extruder/Z winner the hearing skips is not saved, or None."""
     combo = tmc.Chopper(**state['fields'])
     if hearing.skips(combo, tmc.DRIVERS[state['driver']]):
         # the action first: the display shows its first characters (failure_display)
-        return ('re-run CHOPPER_EXTRUDER with AUDIBLE_KHZ=%g: SKIP_AUDIBLE skips its stored '
+        return ('re-run %s with AUDIBLE_KHZ=%g: SKIP_AUDIBLE skips its stored '
                 'winner %s, which runs below %g kHz'
-                % (hearing.limit_hz / 1000, combo.label(), hearing.limit_hz / 1000))
+                % (macro, hearing.limit_hz / 1000, combo.label(), hearing.limit_hz / 1000))
     return None
 
 

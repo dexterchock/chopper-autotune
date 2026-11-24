@@ -47,11 +47,11 @@ def add_motor(parser: argparse.ArgumentParser, both: bool, help_text: str,
 
 
 def _save_motors(text: str) -> str:
-    """MOTOR of CHOPPER_SAVE: A, B and E (the extruder) in any combination, as 'AB'."""
+    """MOTOR of CHOPPER_SAVE / CHOPPER_RESTORE: A, B, E, Z in any combination, as 'AB'."""
     letters = set(text.upper())
-    if not letters or not letters <= set('ABE'):
-        raise argparse.ArgumentTypeError('expected motors A, B, E or several of them, e.g. AB')
-    return ''.join(motor for motor in 'ABE' if motor in letters)
+    if not letters or not letters <= set('ABEZ'):
+        raise argparse.ArgumentTypeError('expected motors A, B, E, Z or several of them, e.g. AB')
+    return ''.join(motor for motor in 'ABEZ' if motor in letters)
 
 
 def _speed(text: str) -> int:
@@ -467,8 +467,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     sv = sub.add_parser('save', help='save the latest tuning result for each motor into the config')
     sv.add_argument('--motor', type=_save_motors, default='ABE',
-                    help='the motors to save: a, b, e (the extruder) or several, e.g. ab; '
-                         'default all three')
+                    help='the motors to save: a, b, e (extruder), z or several, e.g. ab or abez; '
+                         'default abe')
     add_hearing(sv, recorded=True)
     sv.add_argument('--url', default='http://127.0.0.1:7125')
     sv.add_argument('--dry-run', action='store_true',
@@ -479,8 +479,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help='write each driver\'s stock (Klipper default) chopper registers into every '
                          'tuned TMC section; run_current stays as saved')
     rs.add_argument('--motor', type=_save_motors, default=None,
-                    help='with --defaults: the motors to reset, a, b, e (the extruder) or several, '
-                         'e.g. ab; default all three. On an axis with two or more motors, a or b '
+                    help='with --defaults: the motors to reset, a, b, e (extruder), z or several, '
+                         'e.g. ab; default abe. On an axis with multiple motors, a, b, or z '
                          'resets every driver of the axis')
     rs.add_argument('--backup', action='store_true',
                     help='undo the last save: the driver_* and run_current lines it wrote get '
@@ -536,6 +536,40 @@ def build_parser() -> argparse.ArgumentParser:
     e.add_argument('--url', default='http://127.0.0.1:7125')
     e.add_argument('--dry-run', action='store_true')
     e.add_argument('-y', '--yes', action='store_true')
+
+    z = sub.add_parser('z', help='tune the Z axis choppers safely using synchronized G1 Z moves')
+    z.add_argument('--speed', type=float, default=None,
+                   help='skip the Z speed scan and descend at this Z speed (mm/s)')
+    z.add_argument('--min-speed', type=int, default=5, help='scan start in Z mm/s (default 5)')
+    z.add_argument('--max-speed', type=int, default=30,
+                   help='scan end in Z mm/s, capped to max_z_velocity (default 30)')
+    z.add_argument('--step', type=int, default=1, help='Z scan speed increment in mm/s (default 1)')
+    z.add_argument('--accel', type=float, default=None,
+                   help='Z acceleration in mm/s2 (default min(max_z_accel, max_accel))')
+    z.add_argument('--measure-time', type=float, default=1.5,
+                   help='steady cruise time per descent/validation/demo stroke in seconds (default 1.5)')
+    z.add_argument('--scan-measure-time', type=float, default=1.0,
+                   help='steady cruise time per speed-scan stroke in seconds (default 1.0)')
+    z.add_argument('--iterations', type=int, default=1,
+                   help='UP+DOWN repeats per candidate during descent (default 1)')
+    z.add_argument('--trim', type=float, default=0.1,
+                   help='guard fraction trimmed from each end of the steady cruise window (default 0.1)')
+    add_ranges(z)
+    z.add_argument('--tpfd', type=_tpfd, default=tmc.SEARCH_SPACE.tpfd,
+                   help='TPFD range (TMC2240/5160 only), default %s' % tmc.SEARCH_SPACE.tpfd.text())
+    add_hearing(z)
+    z.add_argument('--rounds', type=int, default=4,
+                   help='alternating back-to-back verification rounds (default 4)')
+    z.add_argument('--save', action='store_true',
+                   help='write the winner into all [tmcXXXX stepper_z*] sections and restart')
+    z.add_argument('--save-last', action='store_true',
+                   help='save the previously tuned Z winner without re-tuning')
+    z.add_argument('--demo', action='store_true',
+                   help='before/after Z comparison: Klipper defaults vs live/saved Z registers')
+    z.add_argument('--socket', default=None)
+    z.add_argument('--url', default='http://127.0.0.1:7125')
+    z.add_argument('--dry-run', action='store_true')
+    z.add_argument('-y', '--yes', action='store_true')
 
     env = sub.add_parser('envelope', help='motor torque ceiling: top speed and acceleration '
                                           'before skipped steps, at the configured run current')
@@ -638,6 +672,9 @@ def dispatch(args) -> int:
     if args.command == 'extruder':
         from .extruder import run_extruder
         return run_extruder(args)
+    if args.command == 'z':
+        from .z_axis import run_z
+        return run_z(args)
     if args.command == 'tune':
         from .tune import run_tune
         return run_tune(args)

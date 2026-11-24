@@ -586,15 +586,23 @@ def xy_driver_sections(settings: dict) -> 'list[str]':
     return [name for name in settings if name.startswith('tmc') and name.split(' ', 1)[-1] in steppers]
 
 
+def z_driver_sections(settings: dict) -> 'list[str]':
+    """The TMC sections of every Z motor (stepper_z, stepper_z1, ...)."""
+    steppers = set(rail_steppers(settings, 'z'))
+    return [name for name in settings if name.startswith('tmc') and name.split(' ', 1)[-1] in steppers]
+
+
 class ThermalGuard:
-    """Reads the status Klipper already polls from each X/Y driver, once a second while
+    """Reads the status Klipper already polls from each monitored driver, once a second while
     the motor is enabled (None while it is off): the drv_status warning flags, and the
     die temperature a TMC2240 reports. preflight() before the first move of a run,
     check() before every move after that."""
 
-    def __init__(self, kl: Klippy, settings: dict):
+    def __init__(self, kl: Klippy, settings: dict, sections: 'list[str] | None' = None,
+                 release_on_hot: bool = True):
         self.kl = kl
-        self.sections = xy_driver_sections(settings)
+        self.sections = xy_driver_sections(settings) if sections is None else list(sections)
+        self.release_on_hot = release_on_hot
         self.subscribed = False
         # Klipper leaves a TMC2240 at slope_control 0, the slowest switching edges (the
         # most heat); klipper_tmc_autotune sets 3 "to cool down 2240s"
@@ -658,7 +666,8 @@ class ThermalGuard:
         try:
             self.check()
         except DriverTooHot:
-            release_gantry(self.kl)
+            if self.release_on_hot:
+                release_gantry(self.kl)
             raise
 
 
