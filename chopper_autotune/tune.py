@@ -30,10 +30,10 @@ def sub_args(args, argv: 'list[str]'):
     argv.append('--yes')
     if args.accel is not None:
         argv += ['--accel', str(args.accel)]
-    for flag, enabled in (('--csv', args.csv), ('--no-raw', args.no_raw),
-                          ('--dry-run', args.dry_run)):
+    for flag, enabled in (('--csv', args.csv), ('--dry-run', args.dry_run)):
         if enabled:
             argv.append(flag)
+    argv.append('--no-raw' if args.no_raw else '--no-no-raw')
     return build_parser().parse_args(argv)
 
 

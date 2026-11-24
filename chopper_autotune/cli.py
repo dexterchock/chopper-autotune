@@ -164,6 +164,13 @@ def _gcode_args(argv: 'list[str]', boolean_flags: 'frozenset[str]') -> 'list[str
     return out
 
 
+def add_no_raw(parser: argparse.ArgumentParser, help_text: str = ''):
+    """Default --no-raw on to avoid flooding printer_data/config with raw CSVs."""
+    parser.add_argument('--no-raw', action='store_true', default=True,
+                        help=help_text or 'do not keep raw accelerometer csv (default: on; pass NO_RAW=0 to keep raw csv)')
+    parser.add_argument('--no-no-raw', dest='no_raw', action='store_false', help=argparse.SUPPRESS)
+
+
 def boolean_flags(parser: argparse.ArgumentParser) -> 'frozenset[str]':
     """All on/off option strings across subcommands, so KEY=1 macro params map to flags."""
     flags = set()
@@ -171,7 +178,8 @@ def boolean_flags(parser: argparse.ArgumentParser) -> 'frozenset[str]':
                   if isinstance(action, argparse._SubParsersAction)]
     for subparser in subactions[0].choices.values():
         for action in subparser._actions:
-            if isinstance(action, (argparse._StoreTrueAction, argparse.BooleanOptionalAction)):
+            if isinstance(action, (argparse._StoreTrueAction, argparse._StoreFalseAction,
+                                   argparse.BooleanOptionalAction)):
                 flags.update(action.option_strings)
     return frozenset(flags)
 
@@ -282,7 +290,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help='acceleration of the speed scan and the register search, '
                         'default printer max_accel / 10 (can be higher on a two-motor axis, '
                         'see README)')
-    u.add_argument('--no-raw', action='store_true')
+    add_no_raw(u)
     u.add_argument('--csv', action='store_true')
     u.add_argument('--socket', default=None)
     u.add_argument('--url', default='http://127.0.0.1:7125')
@@ -315,8 +323,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help='guard fraction of the cruise window (stream, default 0.1); '
                         'with --csv: fraction of the whole capture (default 0.25)')
     c.add_argument('--dataset', default=None, help='dataset directory; pass an existing one to resume')
-    c.add_argument('--no-raw', action='store_true',
-                   help='do not keep raw accelerometer csv (disables analyze --recompute)')
+    add_no_raw(c, 'do not keep raw accelerometer csv (default: on; disables analyze --recompute; pass NO_RAW=0 to keep raw csv)')
     c.add_argument('--dry-run', action='store_true', help='print the plan and ETA, do not move anything')
     c.add_argument('-y', '--yes', action='store_true', help='skip the confirmation prompt')
 
@@ -336,7 +343,7 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument('--accel', type=float, default=None, help='acceleration, default printer max_accel / 10 (can be higher on a two-motor axis, see README)')
     f.add_argument('--trim', type=float, default=None)
     f.add_argument('--dataset', default=None, help='dataset directory; pass an existing one to resume')
-    f.add_argument('--no-raw', action='store_true')
+    add_no_raw(f)
     f.add_argument('--dry-run', action='store_true')
     f.add_argument('-y', '--yes', action='store_true')
 
@@ -359,7 +366,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help='acceleration, default printer max_accel / 4 (reaches print speeds)')
     mp.add_argument('--trim', type=float, default=None)
     mp.add_argument('--dataset', default=None, help='dataset directory; pass an existing one to resume')
-    mp.add_argument('--no-raw', action='store_true')
+    add_no_raw(mp)
     mp.add_argument('--dry-run', action='store_true')
     mp.add_argument('-y', '--yes', action='store_true')
 
