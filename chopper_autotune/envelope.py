@@ -132,7 +132,7 @@ def verdict_now(now: 'float | None', suggested: float, over: str, ok: str = 'ok'
     return ' (now %g — %s)' % (now, ok if now <= suggested else over)
 
 
-STRESS_REPS = 3
+STRESS_REPS = 5
 SKIP_HEAD_MM = 0.6                            # head offset that counts as a lost step (~0.8 mm quantum)
 
 
@@ -164,7 +164,7 @@ def stroke_ladders(kinematics: str, motor: str, axis_span: float, speeds, accel:
     configured the one in printer.cfg, per_axis Kalico's limits in force (axis_limits)."""
     from .collect import motor_label
     label = motor_label(motor)
-    span = min(25.0, axis_span / 8)
+    span = min(50.0, axis_span / 6)
     vec = stress_vector(kinematics, motor)
     caps = velocity_caps(kinematics, vec, max_velocity, per_axis)
     cap = belt_cap(caps)

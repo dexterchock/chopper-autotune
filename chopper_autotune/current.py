@@ -22,7 +22,7 @@ from .klippy import Klippy, find_socket
 
 BELT_SPEEDS = (150, 300, 450, 550)
 STATE = os.path.expanduser('~/printer_data/config/chopper-autotune/current.json')
-STROKES_PER_SPEED = 3
+STROKES_PER_SPEED = 5
 COARSE_STEP = 2.0          # fast approach step; the fine creep only covers the last one
 CREEP_STEP = 0.2          # fine step near the trigger, for the actual precision
 CREEP_START = 12.0         # true distance from the endstop before a creep
@@ -344,7 +344,7 @@ def current_tune(kl: Klippy, args) -> int:
     board = hw[motors[0]]
     configured = {m: float(settings['tmc%s stepper_%s' % (hw[m].driver.name, m)]['run_current'])
                   for m in motors}
-    span = min(25.0, board.axis_span / 8)
+    span = min(50.0, board.axis_span / 6)
     limits = live_limits(kl)
     per_axis = axis_limits(kl, board.kinematics)
     accels = {}
